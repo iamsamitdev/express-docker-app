@@ -1,7 +1,11 @@
 pipeline {
     // กำหนดให้ Jenkins ทำงานภายใน Docker container ที่ใช้ image ของ Node.js
     agent {
-        docker { image 'node:22-alpine' }
+        docker {
+            image 'node:22-alpine'
+            // เพิ่มบรรทัดนี้เพื่อกำหนด working directory และ volume mapping
+            args '-w /app -v ${workspace.replace("\\", "/")}:/app'
+        }
     }
 
     environment {
