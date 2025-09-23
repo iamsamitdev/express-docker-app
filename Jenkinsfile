@@ -10,25 +10,46 @@ pipeline {
     }
 
     stages {
-        stage('Build, Test and Push') {
-            // 3. กำหนด agent สำหรับ stage นี้โดยเฉพาะ
+        // STAGE 1: ทำทุกอย่างเกี่ยวกับ Node.js ใน Container
+        stage('Build and Test') {
             agent {
                 docker {
                     image 'node:22-alpine'
+                    // customWorkspace ยังคงจำเป็น แต่เราจะควบคุมการ checkout เอง
                     customWorkspace '/app'
                 }
             }
+            // เพิ่ม options นี้เพื่อไม่ให้ Jenkins checkout โค้ดอัตโนมัติ (ซึ่งเป็นต้นเหตุของปัญหา)
+            options {
+                skipDefaultCheckout true
+            }
             steps {
-                // เอางานต่างๆ มาไว้ใน steps ของ stage นี้
+                // 1. Checkout โค้ดด้วยตัวเอง *หลังจาก* เข้ามาใน container แล้ว
+                checkout scm
+
+                // 2. รันคำสั่ง npm ตามปกติ ซึ่งตอนนี้จะทำงานใน /app ภายใน container
                 echo '--- Installing Dependencies & Running Tests ---'
                 sh 'npm install && npm test'
 
-                echo '--- Building Docker Image ---'
-                script {
-                    // เราต้องประกาศ dockerImage ใหม่ภายใน script block
-                    def dockerImage = docker.build("${DOCKER_REPO}:${env.BUILD_NUMBER}")
+                // 3. บันทึกไฟล์ทั้งหมดใน workspace ไว้สำหรับ stage ต่อไป
+                echo '--- Stashing workspace for next stage ---'
+                stash name: 'source', includes: '**/*'
+            }
+        }
 
-                    echo '--- Pushing Docker Image ---'
+        // STAGE 2: สร้างและ Push Docker Image บน Host
+        stage('Build and Push Docker Image') {
+            // ใช้ agent any เพื่อกลับมาทำงานบน Jenkins Host ที่คุยกับ Docker Desktop ได้
+            agent any
+            steps {
+                // 1. นำไฟล์ที่บันทึกไว้จาก stage ก่อนหน้ากลับมาใช้
+                echo '--- Unstashing workspace ---'
+                unstash 'source'
+
+                // 2. รันคำสั่ง docker build และ push ตามปกติ
+                echo '--- Building and Pushing Docker Image ---'
+                script {
+                    def dockerImage = docker.build("${DOCKER_REPO}:${env.BUILD_NUMBER}")
                     docker.withRegistry('https://index.docker.io/v1/', DOCKER_HUB_CREDENTIALS) {
                         dockerImage.push()
                         dockerImage.push("latest")
