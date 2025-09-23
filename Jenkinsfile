@@ -1,11 +1,6 @@
 pipeline {
-    // กำหนดให้ Jenkins ทำงานภายใน Docker container ที่ใช้ image ของ Node.js
-    agent {
-        docker {
-            image 'node:22-alpine'
-            args '-w /app'
-        }
-    }
+    // กำหนดให้ Jenkins ทำงานบน agent ใดก็ได้ (เหมาะสำหรับ Windows)
+    agent any
 
     environment {
         DOCKER_HUB_CREDENTIALS = credentials('dockerhub-cred')
@@ -22,6 +17,12 @@ pipeline {
         }
 
         stage('Install & Test') {
+            agent {
+                docker {
+                    image 'node:22-alpine'
+                    reuseNode true
+                }
+            }
             steps {
                 // เราใช้ sh ได้เลย เพราะคำสั่งนี้จะถูกรันใน container ซึ่งเป็น Linux
                 echo 'Running inside a Node.js Docker container'
