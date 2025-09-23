@@ -15,8 +15,7 @@ pipeline {
             agent {
                 docker {
                     image 'node:22-alpine'
-                    // ในจุดนี้ env.WORKSPACE จะพร้อมใช้งานแล้ว
-                    args "-w /app -v ${env.WORKSPACE.replace('\\', '/')}:/app"
+                    customWorkspace '/app'
                 }
             }
             steps {
