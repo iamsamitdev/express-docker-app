@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         DOCKER_HUB_CREDENTIALS = credentials('dockerhub-cred')
-        DOCKER_REPO = "your-dockerhub-username/express-docker-app"
+        DOCKER_REPO = "iamsamitdev/express-docker-app"
         APP_NAME = "express-docker-app"
         DEPLOY_SERVER = "user@your-server-ip"
     }
@@ -11,7 +11,7 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'main', url: 'https://github.com/your-repo/express-docker-app.git'
+                git branch: 'main', url: 'https://github.com/iamsamitdev/express-docker-app.git'
             }
         }
 

@@ -2,9 +2,26 @@
 name: CI/CD - Express Docker App
 
 # กำหนด Trigger: ให้ Workflow นี้ทำงานทุกครั้งที่มีการ push ไปยัง branch 'main'
+# on:
+#   push:
+#     branches: [ "main" ]
+
+# กำหนด Trigger: ให้ Workflow นี้ทำงานทุกครั้งที่มีการสร้าง Pull Request ไปยัง branch 'main'
+# on:
+#   pull_request:
+#     branches: [ "main" ]
+
+# กำหนด Trigger: แบบ Manual (Workflow Dispatch) เพื่อให้สามารถกดรันได้เองจากหน้า GitHub
 on:
-  push:
-    branches: [ "main" ]
+  workflow_dispatch:
+
+# กำหนดใช้หลายๆ Trigger พร้อมกัน
+# on:
+#   push:
+#     branches: [ "main" ]
+#   pull_request:
+#     branches: [ "main" ]
+#   workflow_dispatch:
 
 # กำหนด Jobs ที่จะให้ทำงาน
 jobs:
