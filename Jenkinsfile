@@ -1,11 +1,14 @@
 pipeline {
-    agent any
+    // กำหนดให้ Jenkins ทำงานภายใน Docker container ที่ใช้ image ของ Node.js
+    agent {
+        docker { image 'node:22-alpine' }
+    }
 
     environment {
         DOCKER_HUB_CREDENTIALS = credentials('dockerhub-cred')
         DOCKER_REPO = "iamsamitdev/express-docker-app"
-        APP_NAME = "express-docker-app"
-        DEPLOY_SERVER = "user@your-server-ip"
+        // APP_NAME = "express-docker-app"
+        // DEPLOY_SERVER = "user@your-server-ip"
     }
 
     stages {
@@ -17,10 +20,10 @@ pipeline {
 
         stage('Install & Test') {
             steps {
-                sh '''
-                  npm install
-                  npm test
-                '''
+                // เราใช้ sh ได้เลย เพราะคำสั่งนี้จะถูกรันใน container ซึ่งเป็น Linux
+                echo 'Running inside a Node.js Docker container'
+                sh 'npm install'
+                sh 'npm test'
             }
         }
 
@@ -43,39 +46,39 @@ pipeline {
             }
         }
 
-        stage('Deploy to Server') {
-            steps {
-                sshagent(['deploy-server-cred']) {
-                    sh """
-                        ssh -o StrictHostKeyChecking=no $DEPLOY_SERVER '
-                            docker pull ${DOCKER_REPO}:latest &&
-                            docker stop ${APP_NAME} || true &&
-                            docker rm ${APP_NAME} || true &&
-                            docker run -d --name ${APP_NAME} -p 3000:3000 ${DOCKER_REPO}:latest
-                        '
-                    """
-                }
-            }
-        }
+        // stage('Deploy to Server') {
+        //     steps {
+        //         sshagent(['deploy-server-cred']) {
+        //             sh """
+        //                 ssh -o StrictHostKeyChecking=no $DEPLOY_SERVER '
+        //                     docker pull ${DOCKER_REPO}:latest &&
+        //                     docker stop ${APP_NAME} || true &&
+        //                     docker rm ${APP_NAME} || true &&
+        //                     docker run -d --name ${APP_NAME} -p 3000:3000 ${DOCKER_REPO}:latest
+        //                 '
+        //             """
+        //         }
+        //     }
+        // }
 
-        stage('Send Notification (n8n)') {
-            steps {
-                sh """
-                curl -X POST https://n8n.yourdomain/webhook/deploy_notify \\
-                    -H 'Content-Type: application/json' \\
-                    -d '{"project":"${APP_NAME}","status":"success","build":"${BUILD_NUMBER}"}'
-                """
-            }
-        }
+        // stage('Send Notification (n8n)') {
+        //     steps {
+        //         sh """
+        //         curl -X POST https://n8n.yourdomain/webhook/deploy_notify \\
+        //             -H 'Content-Type: application/json' \\
+        //             -d '{"project":"${APP_NAME}","status":"success","build":"${BUILD_NUMBER}"}'
+        //         """
+        //     }
+        // }
     }
 
-    post {
-        failure {
-            sh """
-            curl -X POST https://n8n.yourdomain/webhook/deploy_notify \\
-                -H 'Content-Type: application/json' \\
-                -d '{"project":"${APP_NAME}","status":"failed","build":"${BUILD_NUMBER}"}'
-            """
-        }
-    }
+    // post {
+    //     failure {
+    //         sh """
+    //         curl -X POST https://n8n.yourdomain/webhook/deploy_notify \\
+    //             -H 'Content-Type: application/json' \\
+    //             -d '{"project":"${APP_NAME}","status":"failed","build":"${BUILD_NUMBER}"}'
+    //         """
+    //     }
+    // }
 }
