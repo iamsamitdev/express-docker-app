@@ -3,7 +3,7 @@ pipeline {
     agent {
         docker {
             image 'node:22-alpine'
-            args "-w /app -v ${env.WORKSPACE.replace('\\', '/')}:/app"
+            args '-w /app'
         }
     }
 
