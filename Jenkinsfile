@@ -1,6 +1,6 @@
 pipeline {
     // กำหนดให้ Jenkins ทำงานบน agent ใดก็ได้ (เหมาะสำหรับ Windows)
-    agent any
+    agent none
 
     environment {
         DOCKER_HUB_CREDENTIALS = credentials('dockerhub-cred')
@@ -10,39 +10,27 @@ pipeline {
     }
 
     stages {
-        stage('Checkout') {
-            steps {
-                git branch: 'main', url: 'https://github.com/iamsamitdev/express-docker-app.git'
-            }
-        }
-
-        stage('Install & Test') {
+        stage('Build, Test and Push') {
+            // 3. กำหนด agent สำหรับ stage นี้โดยเฉพาะ
             agent {
                 docker {
                     image 'node:22-alpine'
-                    reuseNode true
+                    // ในจุดนี้ env.WORKSPACE จะพร้อมใช้งานแล้ว
+                    args "-w /app -v ${env.WORKSPACE.replace('\\', '/')}:/app"
                 }
             }
             steps {
-                // เราใช้ sh ได้เลย เพราะคำสั่งนี้จะถูกรันใน container ซึ่งเป็น Linux
-                echo 'Running inside a Node.js Docker container'
-                sh 'npm install'
-                sh 'npm test'
-            }
-        }
+                // เอางานต่างๆ มาไว้ใน steps ของ stage นี้
+                echo '--- Installing Dependencies & Running Tests ---'
+                sh 'npm install && npm test'
 
-        stage('Build Docker Image') {
-            steps {
+                echo '--- Building Docker Image ---'
                 script {
-                    dockerImage = docker.build("${DOCKER_REPO}:${BUILD_NUMBER}")
-                }
-            }
-        }
+                    // เราต้องประกาศ dockerImage ใหม่ภายใน script block
+                    def dockerImage = docker.build("${DOCKER_REPO}:${env.BUILD_NUMBER}")
 
-        stage('Push Docker Image') {
-            steps {
-                script {
-                    docker.withRegistry('https://index.docker.io/v1/', "${DOCKER_HUB_CREDENTIALS}") {
+                    echo '--- Pushing Docker Image ---'
+                    docker.withRegistry('https://index.docker.io/v1/', DOCKER_HUB_CREDENTIALS) {
                         dockerImage.push()
                         dockerImage.push("latest")
                     }
