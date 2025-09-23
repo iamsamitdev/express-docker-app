@@ -3,8 +3,7 @@ pipeline {
     agent {
         docker {
             image 'node:22-alpine'
-            // เพิ่มบรรทัดนี้เพื่อกำหนด working directory และ volume mapping
-            args '-w /app -v ${workspace.replace("\\", "/")}:/app'
+            args "-w /app -v ${workspace.replace('\\', '/')}:/app"
         }
     }
 
