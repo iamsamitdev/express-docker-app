@@ -1,12 +1,6 @@
 pipeline {
-    // ใช้ Docker agent ที่รองรับทุก platform (Linux/MacOS/Windows)
-    agent {
-        docker { 
-            image 'node:22-alpine'
-            // reuseNode เพื่อใช้ workspace เดียวกันกับ host
-            reuseNode true
-        }
-    }
+    // ใช้ any agent เพื่อหลีกเลี่ยงปัญหา Docker path mounting บน Windows
+    agent any
 
     environment {
         DOCKER_HUB_CREDENTIALS = credentials('dockerhub-cred')
@@ -24,33 +18,74 @@ pipeline {
             }
         }
 
-        // Stage 2: ติดตั้ง dependencies และรันเทสต์ (ใน Docker container)
+        // Stage 2: ติดตั้ง dependencies และรันเทสต์ (รองรับทุก Platform)
         stage('Install & Test') {
             steps {
-                // ใช้ sh เพราะทำงานใน Linux container (Docker)
-                sh 'npm install'
-                sh 'npm test'
+                script {
+                    // ตรวจสอบว่ามี Node.js บน host หรือไม่
+                    def hasNodeJS = false
+                    def isWindows = isUnix() ? false : true
+                    
+                    try {
+                        if (isWindows) {
+                            bat 'node --version && npm --version'
+                        } else {
+                            sh 'node --version && npm --version'
+                        }
+                        hasNodeJS = true
+                        echo "Using Node.js installed on ${isWindows ? 'Windows' : 'Unix'}"
+                    } catch (Exception e) {
+                        echo "Node.js not found on host, using Docker"
+                        hasNodeJS = false
+                    }
+                    
+                    if (hasNodeJS) {
+                        // ใช้ Node.js บน host
+                        if (isWindows) {
+                            bat '''
+                                npm install
+                                npm test
+                            '''
+                        } else {
+                            sh '''
+                                npm install
+                                npm test
+                            '''
+                        }
+                    } else {
+                        // ใช้ Docker run command (รองรับทุก platform)
+                        if (isWindows) {
+                            bat '''
+                                docker run --rm ^
+                                -v "%cd%":/workspace ^
+                                -w /workspace ^
+                                node:22-alpine sh -c "npm install && npm test"
+                            '''
+                        } else {
+                            sh '''
+                                docker run --rm \\
+                                -v "$(pwd)":/workspace \\
+                                -w /workspace \\
+                                node:22-alpine sh -c "npm install && npm test"
+                            '''
+                        }
+                    }
+                }
             }
         }
 
         // Stage 3: สร้าง Docker Image สำหรับ production
         stage('Build Docker Image') {
-            // ใช้ any agent เพื่อเข้าถึง Docker daemon ของ host
-            agent any
             steps {
                 script {
                     echo "Building Docker image: ${DOCKER_REPO}:${BUILD_NUMBER}"
-                    def prodImage = docker.build("${DOCKER_REPO}:${BUILD_NUMBER}", "--target production .")
-                    // เก็บ image ไว้ใช้ใน stage ถัดไป
-                    env.DOCKER_IMAGE_ID = prodImage.id
+                    docker.build("${DOCKER_REPO}:${BUILD_NUMBER}", "--target production .")
                 }
             }
         }
 
         // Stage 4: Push Image ไปยัง Docker Hub
         stage('Push to Docker Hub') {
-            // ใช้ any agent เพื่อเข้าถึง Docker daemon ของ host
-            agent any
             steps {
                 script {
                     docker.withRegistry('https://registry.hub.docker.com', DOCKER_HUB_CREDENTIALS) {
