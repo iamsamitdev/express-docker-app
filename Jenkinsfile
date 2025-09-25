@@ -85,10 +85,10 @@ pipeline {
         }
 
         // Stage 4: Push Image ไปยัง Docker Hub
-        stage('Push to Docker Hub') {
+        stage('Push Docker Image') {
             steps {
                 script {
-                    docker.withRegistry('https://index.docker.io/v1/', DOCKER_HUB_CREDENTIALS) {
+                    docker.withRegistry('https://index.docker.io/v1/', "${DOCKER_HUB_CREDENTIALS}") {
                         echo "Pushing image to Docker Hub..."
                         def image = docker.image("${DOCKER_REPO}:${BUILD_NUMBER}")
                         image.push()
