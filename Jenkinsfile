@@ -1,6 +1,12 @@
 pipeline {
-    // กำหนดให้ Jenkins ทำงานบน agent ใดก็ได้ (เหมาะสำหรับ Windows)
-    agent none
+    // ใช้ Docker agent ที่รองรับทุก platform (Linux/MacOS/Windows)
+    agent {
+        docker { 
+            image 'node:22-alpine'
+            // reuseNode เพื่อใช้ workspace เดียวกันกับ host
+            reuseNode true
+        }
+    }
 
     environment {
         DOCKER_HUB_CREDENTIALS = credentials('dockerhub-cred')
@@ -10,55 +16,55 @@ pipeline {
     }
 
     stages {
-        // STAGE 1: ทำทุกอย่างเกี่ยวกับ Node.js ใน Container
-        stage('Build and Test') {
-            agent {
-                docker {
-                    image 'node:22-alpine'
-                    // customWorkspace ยังคงจำเป็น แต่เราจะควบคุมการ checkout เอง
-                    customWorkspace '/app'
-                }
-            }
-            // เพิ่ม options นี้เพื่อไม่ให้ Jenkins checkout โค้ดอัตโนมัติ (ซึ่งเป็นต้นเหตุของปัญหา)
-            options {
-                skipDefaultCheckout true
-            }
+        // Stage 1: ดึงโค้ดล่าสุดจาก Git
+        stage('Checkout') {
             steps {
-                // 1. Checkout โค้ดด้วยตัวเอง *หลังจาก* เข้ามาใน container แล้ว
+                echo 'Checking out code...'
                 checkout scm
-
-                // 2. รันคำสั่ง npm ตามปกติ ซึ่งตอนนี้จะทำงานใน /app ภายใน container
-                echo '--- Installing Dependencies & Running Tests ---'
-                sh 'npm install && npm test'
-
-                // 3. บันทึกไฟล์ทั้งหมดใน workspace ไว้สำหรับ stage ต่อไป
-                echo '--- Stashing workspace for next stage ---'
-                stash name: 'source', includes: '**/*'
             }
         }
 
-        // STAGE 2: สร้างและ Push Docker Image บน Host
-        stage('Build and Push Docker Image') {
-            // ใช้ agent any เพื่อกลับมาทำงานบน Jenkins Host ที่คุยกับ Docker Desktop ได้
+        // Stage 2: ติดตั้ง dependencies และรันเทสต์ (ใน Docker container)
+        stage('Install & Test') {
+            steps {
+                // ใช้ sh เพราะทำงานใน Linux container (Docker)
+                sh 'npm install'
+                sh 'npm test'
+            }
+        }
+
+        // Stage 3: สร้าง Docker Image สำหรับ production
+        stage('Build Docker Image') {
+            // ใช้ any agent เพื่อเข้าถึง Docker daemon ของ host
             agent any
             steps {
-                // 1. นำไฟล์ที่บันทึกไว้จาก stage ก่อนหน้ากลับมาใช้
-                echo '--- Unstashing workspace ---'
-                unstash 'source'
-
-                // 2. รันคำสั่ง docker build และ push ตามปกติ
-                echo '--- Building and Pushing Docker Image ---'
                 script {
-                    def dockerImage = docker.build("${DOCKER_REPO}:${env.BUILD_NUMBER}")
-                    docker.withRegistry('https://index.docker.io/v1/', DOCKER_HUB_CREDENTIALS) {
-                        dockerImage.push()
-                        dockerImage.push("latest")
+                    echo "Building Docker image: ${DOCKER_REPO}:${BUILD_NUMBER}"
+                    def prodImage = docker.build("${DOCKER_REPO}:${BUILD_NUMBER}", "--target production .")
+                    // เก็บ image ไว้ใช้ใน stage ถัดไป
+                    env.DOCKER_IMAGE_ID = prodImage.id
+                }
+            }
+        }
+
+        // Stage 4: Push Image ไปยัง Docker Hub
+        stage('Push to Docker Hub') {
+            // ใช้ any agent เพื่อเข้าถึง Docker daemon ของ host
+            agent any
+            steps {
+                script {
+                    docker.withRegistry('https://registry.hub.docker.com', DOCKER_HUB_CREDENTIALS) {
+                        echo "Pushing image to Docker Hub..."
+                        def image = docker.image("${DOCKER_REPO}:${BUILD_NUMBER}")
+                        image.push()
+                        image.push('latest')
                     }
                 }
             }
         }
+    }
 
-        // stage('Deploy to Server') {
+    // stage('Deploy to Server') {
         //     steps {
         //         sshagent(['deploy-server-cred']) {
         //             sh """
@@ -82,7 +88,7 @@ pipeline {
         //         """
         //     }
         // }
-    }
+    // }
 
     // post {
     //     failure {
