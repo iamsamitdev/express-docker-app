@@ -124,6 +124,33 @@ pipeline {
                 }
             }
         }
+
+        // Stage 6: Deploy latest image to localhost for smoke test
+        stage('Deploy Local') {
+            steps {
+                script {
+                    def isWindows = isUnix() ? false : true
+                    echo 'Deploying container a-running-app from latest image...'
+                    if (isWindows) {
+                        bat """
+                            docker pull ${DOCKER_REPO}:latest
+                            docker stop a-running-app || echo ignore
+                            docker rm a-running-app || echo ignore
+                            docker run -d --name a-running-app -p 3000:3000 ${DOCKER_REPO}:latest
+                            docker ps --filter name=a-running-app --format \"table {{.Names}}\t{{.Image}}\t{{.Status}}\"
+                        """
+                    } else {
+                        sh """
+                            docker pull ${DOCKER_REPO}:latest
+                            docker stop a-running-app || true
+                            docker rm a-running-app || true
+                            docker run -d --name a-running-app -p 3000:3000 ${DOCKER_REPO}:latest
+                            docker ps --filter name=a-running-app --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
+                        """
+                    }
+                }
+            }
+        }
     }
 
     // stage('Deploy to Server') {
