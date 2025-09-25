@@ -99,6 +99,31 @@ pipeline {
                 }
             }
         }
+
+        // Stage 5: Cleanup local Docker cache/images on the agent to save disk space
+        stage('Cleanup Docker') {
+            steps {
+                script {
+                    def isWindows = isUnix() ? false : true
+                    echo 'Cleaning up local Docker images/cache on agent...'
+                    if (isWindows) {
+                        bat """
+                            docker image rm -f ${DOCKER_REPO}:${BUILD_NUMBER} || echo ignore
+                            docker image rm -f ${DOCKER_REPO}:latest || echo ignore
+                            docker image prune -af -f
+                            docker builder prune -af -f
+                        """
+                    } else {
+                        sh """
+                            docker image rm -f ${DOCKER_REPO}:${BUILD_NUMBER} || true
+                            docker image rm -f ${DOCKER_REPO}:latest || true
+                            docker image prune -af -f
+                            docker builder prune -af -f
+                        """
+                    }
+                }
+            }
+        }
     }
 
     // stage('Deploy to Server') {
