@@ -31,7 +31,7 @@ RUN npm ci --only=production && npm cache clean --force
 
 # Copy โค้ดที่ compiled แล้วจาก builder stage
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/src ./src
+# COPY --from=builder /app/src ./src
 
 # กำหนด Port ที่ Container จะทำงาน
 EXPOSE 3000

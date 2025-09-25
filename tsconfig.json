@@ -7,8 +7,10 @@
     "strict": true,
     "skipLibCheck": true,
     "outDir": "dist",
+    "rootDir": "src",
     "types": ["jest", "node"]
   },
-  "include": ["src/**/*", "tests/**/*"],
+  // คอมไพล์เฉพาะโค้ดแอป; การทดสอบจะถูกแปลงด้วย ts-jest แยกต่างหาก
+  "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
 }
