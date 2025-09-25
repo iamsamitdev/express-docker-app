@@ -3,7 +3,8 @@ pipeline {
     agent any
 
     environment {
-        DOCKER_HUB_CREDENTIALS = credentials('dockerhub-cred')
+        // ใช้ค่าเป็น "credentialsId" ของ Jenkins โดยตรงสำหรับ docker.withRegistry
+        DOCKER_HUB_CREDENTIALS_ID = 'dockerhub-cred'
         DOCKER_REPO = "iamsamitdev/express-docker-app"
         // APP_NAME = "express-docker-app"
         // DEPLOY_SERVER = "user@your-server-ip"
@@ -88,7 +89,8 @@ pipeline {
         stage('Push Docker Image') {
             steps {
                 script {
-                    docker.withRegistry('https://index.docker.io/v1/', "${DOCKER_HUB_CREDENTIALS}") {
+                    // ต้องส่งค่าเป็น credentialsId เท่านั้น ไม่ใช่ค่าที่ mask ของ credentials()
+                    docker.withRegistry('https://index.docker.io/v1/', env.DOCKER_HUB_CREDENTIALS_ID) {
                         echo "Pushing image to Docker Hub..."
                         def image = docker.image("${DOCKER_REPO}:${BUILD_NUMBER}")
                         image.push()
