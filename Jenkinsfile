@@ -2,6 +2,7 @@ pipeline {
     // ใช้ any agent เพื่อหลีกเลี่ยงปัญหา Docker path mounting บน Windows
     agent any
 
+    // กำหนด environment variables
     environment {
         // ใช้ค่าเป็น "credentialsId" ของ Jenkins โดยตรงสำหรับ docker.withRegistry
         DOCKER_HUB_CREDENTIALS_ID = 'dockerhub-cred'
@@ -10,6 +11,7 @@ pipeline {
         // DEPLOY_SERVER = "user@your-server-ip"
     }
 
+    // กำหนด stages ของ Pipeline
     stages {
         // Stage 1: ดึงโค้ดล่าสุดจาก Git
         stage('Checkout') {
@@ -176,6 +178,36 @@ pipeline {
                                 """
                             }
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    // แจ้งเตือนเมื่อ Pipeline ล้มเหลว (failure)
+    post {
+        failure {
+            script {
+                def isWindows = isUnix() ? false : true
+                withCredentials([string(credentialsId: 'n8n-webhook', variable: 'N8N_WEBHOOK_URL')]) {
+                    if (isWindows) {
+                        bat '''
+                            powershell -NoProfile -Command "$body = [PSCustomObject]@{ project=$env:JOB_NAME; stage='Pipeline'; status='failed'; build=$env:BUILD_NUMBER; image=($env:DOCKER_REPO + ':latest'); container='a-running-app'; url='http://localhost:3000/'; timestamp=(Get-Date -Format o) }; $json = $body | ConvertTo-Json; Invoke-RestMethod -Uri $env:N8N_WEBHOOK_URL -Method Post -ContentType 'application/json' -Body $json"
+                        '''
+                    } else {
+                        sh """
+                            curl -s -X POST "$N8N_WEBHOOK_URL" \
+                              -H 'Content-Type: application/json' \
+                              -d '{
+                                    "project": "${JOB_NAME}",
+                                    "stage": "Pipeline",
+                                    "status": "failed",
+                                    "build": "${BUILD_NUMBER}",
+                                    "image": "${DOCKER_REPO}:latest",
+                                    "container": "a-running-app",
+                                    "url": "http://localhost:3000/"
+                                  }'
+                        """
                     }
                 }
             }
