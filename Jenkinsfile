@@ -156,12 +156,9 @@ pipeline {
                         def isWindows = isUnix() ? false : true
                         withCredentials([string(credentialsId: 'n8n-webhook', variable: 'N8N_WEBHOOK_URL')]) {
                             if (isWindows) {
-                                // ใช้ PowerShell ผ่าน bat โดยหลีกเลี่ยง Groovy interpolation ของตัวแปร $payload
+                                // ใช้ PowerShell แบบบรรทัดเดียว (ไม่มี caret ^) เพื่อหลีกเลี่ยง error ใน cmd
                                 bat '''
-                                    powershell -NoProfile -Command ^
-                                      "$body = [PSCustomObject]@{ project=$env:JOB_NAME; stage='Deploy Local'; status='success'; build=$env:BUILD_NUMBER; image=\"$env:DOCKER_REPO:latest\"; container='a-running-app'; url='http://localhost:3000/'; timestamp=(Get-Date -Format o) }; ^
-                                      $json = $body | ConvertTo-Json; ^
-                                      Invoke-RestMethod -Uri $env:N8N_WEBHOOK_URL -Method Post -ContentType 'application/json' -Body $json"
+                                    powershell -NoProfile -Command "$body = [PSCustomObject]@{ project=$env:JOB_NAME; stage='Deploy Local'; status='success'; build=$env:BUILD_NUMBER; image=($env:DOCKER_REPO + ':latest'); container='a-running-app'; url='http://localhost:3000/'; timestamp=(Get-Date -Format o) }; $json = $body | ConvertTo-Json; Invoke-RestMethod -Uri $env:N8N_WEBHOOK_URL -Method Post -ContentType 'application/json' -Body $json"
                                 '''
                             } else {
                                 sh """
