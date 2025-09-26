@@ -26,4 +26,5 @@ app.get('/api/health', (_: Request, res: Response) => {
   })
 })
 
+// Start server
 app.listen(port, () => console.log(`Application is running on port ${port}`))
