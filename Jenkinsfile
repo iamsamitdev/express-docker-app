@@ -7,7 +7,7 @@ pipeline {
         // ใช้ค่าเป็น "credentialsId" ของ Jenkins โดยตรงสำหรับ docker.withRegistry
         DOCKER_HUB_CREDENTIALS_ID = 'dockerhub-cred'
         DOCKER_REPO = "iamsamitdev/express-docker-app"
-        // APP_NAME = "express-docker-app"
+        APP_NAME = "express-docker-app"
         // DEPLOY_SERVER = "user@your-server-ip"
     }
 
@@ -16,7 +16,7 @@ pipeline {
         // Stage 1: ดึงโค้ดล่าสุดจาก Git
         stage('Checkout') {
             steps {
-                echo 'Checking out code...'
+                echo "Checking out code..."
                 checkout scm
             }
         }
@@ -107,7 +107,7 @@ pipeline {
             steps {
                 script {
                     def isWindows = isUnix() ? false : true
-                    echo 'Cleaning up local Docker images/cache on agent...'
+                    echo "Cleaning up local Docker images/cache on agent..."
                     if (isWindows) {
                         bat """
                             docker image rm -f ${DOCKER_REPO}:${BUILD_NUMBER} || echo ignore
@@ -132,22 +132,22 @@ pipeline {
             steps {
                 script {
                     def isWindows = isUnix() ? false : true
-                    echo 'Deploying container a-running-app from latest image...'
+                    echo "Deploying container ${APP_NAME} from latest image..."
                     if (isWindows) {
                         bat """
                             docker pull ${DOCKER_REPO}:latest
-                            docker stop a-running-app || echo ignore
-                            docker rm a-running-app || echo ignore
-                            docker run -d --name a-running-app -p 3000:3000 ${DOCKER_REPO}:latest
-                            docker ps --filter name=a-running-app --format \"table {{.Names}}\t{{.Image}}\t{{.Status}}\"
+                            docker stop ${APP_NAME} || echo ignore
+                            docker rm ${APP_NAME} || echo ignore
+                            docker run -d --name ${APP_NAME} -p 3000:3000 ${DOCKER_REPO}:latest
+                            docker ps --filter name=${APP_NAME} --format \"table {{.Names}}\t{{.Image}}\t{{.Status}}\"
                         """
                     } else {
                         sh """
                             docker pull ${DOCKER_REPO}:latest
-                            docker stop a-running-app || true
-                            docker rm a-running-app || true
-                            docker run -d --name a-running-app -p 3000:3000 ${DOCKER_REPO}:latest
-                            docker ps --filter name=a-running-app --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
+                            docker stop ${APP_NAME} || true
+                            docker rm ${APP_NAME} || true
+                            docker run -d --name ${APP_NAME} -p 3000:3000 ${DOCKER_REPO}:latest
+                            docker ps --filter name=${APP_NAME} --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
                         """
                     }
                 }
@@ -160,7 +160,7 @@ pipeline {
                             if (isWindows) {
                                 // ใช้ PowerShell แบบบรรทัดเดียว (ไม่มี caret ^) เพื่อหลีกเลี่ยง error ใน cmd
                                 bat '''
-                                    powershell -NoProfile -Command "$body = [PSCustomObject]@{ project=$env:JOB_NAME; stage='Deploy Local'; status='success'; build=$env:BUILD_NUMBER; image=($env:DOCKER_REPO + ':latest'); container='a-running-app'; url='http://localhost:3000/'; timestamp=(Get-Date -Format o) }; $json = $body | ConvertTo-Json; Invoke-RestMethod -Uri $env:N8N_WEBHOOK_URL -Method Post -ContentType 'application/json' -Body $json"
+                                    powershell -NoProfile -Command "$body = [PSCustomObject]@{ project=$env:JOB_NAME; stage='Deploy Local'; status='success'; build=$env:BUILD_NUMBER; image=($env:DOCKER_REPO + ':latest'); container=$env:APP_NAME; url='http://localhost:3000/'; timestamp=(Get-Date -Format o) }; $json = $body | ConvertTo-Json; Invoke-RestMethod -Uri $env:N8N_WEBHOOK_URL -Method Post -ContentType 'application/json' -Body $json"
                                 '''
                             } else {
                                 sh """
@@ -172,7 +172,7 @@ pipeline {
                                             "status": "success",
                                             "build": "${BUILD_NUMBER}",
                                             "image": "${DOCKER_REPO}:latest",
-                                            "container": "a-running-app",
+                                            "container": "${APP_NAME}",
                                             "url": "http://localhost:3000/"
                                           }'
                                 """
@@ -182,39 +182,9 @@ pipeline {
                 }
             }
         }
-    }
 
-    // แจ้งเตือนเมื่อ Pipeline ล้มเหลว (failure)
-    post {
-        failure {
-            script {
-                def isWindows = isUnix() ? false : true
-                withCredentials([string(credentialsId: 'n8n-webhook', variable: 'N8N_WEBHOOK_URL')]) {
-                    if (isWindows) {
-                        bat '''
-                            powershell -NoProfile -Command "$body = [PSCustomObject]@{ project=$env:JOB_NAME; stage='Pipeline'; status='failed'; build=$env:BUILD_NUMBER; image=($env:DOCKER_REPO + ':latest'); container='a-running-app'; url='http://localhost:3000/'; timestamp=(Get-Date -Format o) }; $json = $body | ConvertTo-Json; Invoke-RestMethod -Uri $env:N8N_WEBHOOK_URL -Method Post -ContentType 'application/json' -Body $json"
-                        '''
-                    } else {
-                        sh """
-                            curl -s -X POST "$N8N_WEBHOOK_URL" \
-                              -H 'Content-Type: application/json' \
-                              -d '{
-                                    "project": "${JOB_NAME}",
-                                    "stage": "Pipeline",
-                                    "status": "failed",
-                                    "build": "${BUILD_NUMBER}",
-                                    "image": "${DOCKER_REPO}:latest",
-                                    "container": "a-running-app",
-                                    "url": "http://localhost:3000/"
-                                  }'
-                        """
-                    }
-                }
-            }
-        }
-    }
-
-    // stage('Deploy to Server') {
+        // Stage 7: Deploy to remote server (optional)
+        // stage('Deploy to Server') {
         //     steps {
         //         sshagent(['deploy-server-cred']) {
         //             sh """
@@ -227,26 +197,66 @@ pipeline {
         //             """
         //         }
         //     }
-        // }
 
-        // stage('Send Notification (n8n)') {
-        //     steps {
-        //         sh """
-        //         curl -X POST https://n8n.yourdomain/webhook/deploy_notify \\
-        //             -H 'Content-Type: application/json' \\
-        //             -d '{"project":"${APP_NAME}","status":"success","build":"${BUILD_NUMBER}"}'
-        //         """
+        //     post {
+        //         success {
+        //             script {
+        //                 def isWindows = isUnix() ? false : true
+        //                 withCredentials([string(credentialsId: 'n8n-webhook', variable: 'N8N_WEBHOOK_URL')]) {
+        //                     if (isWindows) {
+                                // ใช้ PowerShell แบบบรรทัดเดียว (ไม่มี caret ^) เพื่อหลีกเลี่ยง error ใน cmd
+        //                         bat '''
+        //                             powershell -NoProfile -Command "$body = [PSCustomObject]@{ project=$env:JOB_NAME; stage='Deploy Local'; status='success'; build=$env:BUILD_NUMBER; image=($env:DOCKER_REPO + ':latest'); container=$env:APP_NAME; url='http://localhost:3000/'; timestamp=(Get-Date -Format o) }; $json = $body | ConvertTo-Json; Invoke-RestMethod -Uri $env:N8N_WEBHOOK_URL -Method Post -ContentType 'application/json' -Body $json"
+        //                         '''
+        //                     } else {
+        //                         sh """
+        //                             curl -s -X POST "$N8N_WEBHOOK_URL" \
+        //                               -H 'Content-Type: application/json' \
+        //                               -d '{
+        //                                     "project": "${JOB_NAME}",
+        //                                     "stage": "Deploy Local",
+        //                                     "status": "success",
+        //                                     "build": "${BUILD_NUMBER}",
+        //                                     "image": "${DOCKER_REPO}:latest",
+        //                                     "container": "${APP_NAME}",
+        //                                     "url": "http://localhost:3000/"
+        //                                   }'
+        //                         """
+        //                     }
+        //                 }
+        //             }
+        //         }
         //     }
         // }
-    // }
+    }
 
-    // post {
-    //     failure {
-    //         sh """
-    //         curl -X POST https://n8n.yourdomain/webhook/deploy_notify \\
-    //             -H 'Content-Type: application/json' \\
-    //             -d '{"project":"${APP_NAME}","status":"failed","build":"${BUILD_NUMBER}"}'
-    //         """
-    //     }
-    // }
+    // แจ้งเตือนเมื่อ Pipeline ล้มเหลว (failure)
+    post {
+        failure {
+            script {
+                def isWindows = isUnix() ? false : true
+                withCredentials([string(credentialsId: 'n8n-webhook', variable: 'N8N_WEBHOOK_URL')]) {
+                    if (isWindows) {
+                        bat '''
+                            powershell -NoProfile -Command "$body = [PSCustomObject]@{ project=$env:JOB_NAME; stage='Pipeline'; status='failed'; build=$env:BUILD_NUMBER; image=($env:DOCKER_REPO + ':latest'); container=$env:APP_NAME; url='http://localhost:3000/'; timestamp=(Get-Date -Format o) }; $json = $body | ConvertTo-Json; Invoke-RestMethod -Uri $env:N8N_WEBHOOK_URL -Method Post -ContentType 'application/json' -Body $json"
+                        '''
+                    } else {
+                        sh """
+                            curl -s -X POST "$N8N_WEBHOOK_URL" \
+                              -H 'Content-Type: application/json' \
+                              -d '{
+                                    "project": "${JOB_NAME}",
+                                    "stage": "Pipeline",
+                                    "status": "failed",
+                                    "build": "${BUILD_NUMBER}",
+                                    "image": "${DOCKER_REPO}:latest",
+                                    "container": "${APP_NAME}",
+                                    "url": "http://localhost:3000/"
+                                  }'
+                        """
+                    }
+                }
+            }
+        }
+    }
 }
