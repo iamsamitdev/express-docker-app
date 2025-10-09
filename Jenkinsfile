@@ -98,26 +98,15 @@ pipeline {
                             ]
                             def body = groovy.json.JsonOutput.toJson(payload)
                             try {
-                                httpRequest acceptType: 'APPLICATION_JSON',
-                                            contentType: 'APPLICATION_JSON',
-                                            httpMode: 'POST',
-                                            requestBody: body,
-                                            url: N8N_WEBHOOK_URL,
-                                            validResponseCodes: '100:599'
-                                echo 'n8n webhook (success) sent via httpRequest.'
-                            } catch (err) {
-                                echo "httpRequest failed or not available: ${err}. Falling back to Java URLConnection..."
-                                try {
-                                    def conn = new java.net.URL(N8N_WEBHOOK_URL).openConnection()
-                                    conn.setRequestMethod('POST')
-                                    conn.setDoOutput(true)
-                                    conn.setRequestProperty('Content-Type', 'application/json')
-                                    conn.getOutputStream().withWriter('UTF-8') { it << body }
-                                    int rc = conn.getResponseCode()
-                                    echo "n8n webhook (success) via URLConnection, response code: ${rc}"
-                                } catch (e2) {
-                                    echo "Failed to notify n8n (success): ${e2}"
-                                }
+                                def conn = new java.net.URL(N8N_WEBHOOK_URL).openConnection()
+                                conn.setRequestMethod('POST')
+                                conn.setDoOutput(true)
+                                conn.setRequestProperty('Content-Type', 'application/json')
+                                conn.getOutputStream().withWriter('UTF-8') { it << body }
+                                int rc = conn.getResponseCode()
+                                echo "n8n webhook (success) via URLConnection, response code: ${rc}"
+                            } catch (e) {
+                                echo "Failed to notify n8n (success): ${e}"
                             }
                         }
                     }
@@ -143,26 +132,15 @@ pipeline {
                     ]
                     def body = groovy.json.JsonOutput.toJson(payload)
                     try {
-                        httpRequest acceptType: 'APPLICATION_JSON',
-                                    contentType: 'APPLICATION_JSON',
-                                    httpMode: 'POST',
-                                    requestBody: body,
-                                    url: N8N_WEBHOOK_URL,
-                                    validResponseCodes: '100:599'
-                        echo 'n8n webhook (failure) sent via httpRequest.'
-                    } catch (err) {
-                        echo "httpRequest failed or not available: ${err}. Falling back to Java URLConnection..."
-                        try {
-                            def conn = new java.net.URL(N8N_WEBHOOK_URL).openConnection()
-                            conn.setRequestMethod('POST')
-                            conn.setDoOutput(true)
-                            conn.setRequestProperty('Content-Type', 'application/json')
-                            conn.getOutputStream().withWriter('UTF-8') { it << body }
-                            int rc = conn.getResponseCode()
-                            echo "n8n webhook (failure) via URLConnection, response code: ${rc}"
-                        } catch (e2) {
-                            echo "Failed to notify n8n (failure): ${e2}"
-                        }
+                        def conn = new java.net.URL(N8N_WEBHOOK_URL).openConnection()
+                        conn.setRequestMethod('POST')
+                        conn.setDoOutput(true)
+                        conn.setRequestProperty('Content-Type', 'application/json')
+                        conn.getOutputStream().withWriter('UTF-8') { it << body }
+                        int rc = conn.getResponseCode()
+                        echo "n8n webhook (failure) via URLConnection, response code: ${rc}"
+                    } catch (e) {
+                        echo "Failed to notify n8n (failure): ${e}"
                     }
                 }
             }
